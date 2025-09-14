@@ -1,4 +1,6 @@
 # Treadmill with random reward
+import random
+
 from devices.frame_trigger import Frame_trigger
 from pyControl.utility import *
 from devices import *
@@ -6,6 +8,7 @@ import gc
 #a version for sessions with no reward - position is not checked by regular poll. still everything is recorded
 '''---------------------------------------------------- STIM CONFIG--------------------------------------------------'''
 train_period = 5 #a stim train will be triggered in evey X sec #0 to never trigger.
+train_probability = 0.5
 train_count = None #number of max trains per session, use None for unlimited
 
 v.houselight = False  # to turn on blue LED during task
@@ -18,6 +21,8 @@ ul = 24  # ms/microliter
 
 v.train_period = train_period * second #photostim train interval
 v.train_count = train_count
+v.train_active = 0
+v.train_probability = train_probability
 
 # other settings
 v.verbose = 1
@@ -79,10 +84,11 @@ def set_stim():
     '''
     Sets the stim timer
     '''
-    if v.train_count is None or v.train_count:
-        set_timer('photostim_train', v.train_period, output_event=True)
-        if v.train_count is not None:
-            v.train_count -= 1
+    if v.train_active:
+        if v.train_count is None or v.train_count:
+            set_timer('photostim_train', v.train_period, output_event=True)
+            if v.train_count is not None:
+                v.train_count -= 1
     # gc.collect()  # this is a good time to garbage collect as nothing urgent can happen
 
 def run_start():
@@ -98,6 +104,11 @@ def run_end():
 # State behaviour functions.
 def trial_start(event):
     if event == 'entry':
+        # For closed loop, we do 50% activation
+        if random() < v.train_probability:
+            v.train_active = 1
+        else:
+            v.train_active = 0
         set_stim()
         timed_goto_state('recording', 1 * second)
 
