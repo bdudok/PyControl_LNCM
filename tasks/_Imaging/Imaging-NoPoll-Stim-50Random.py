@@ -7,7 +7,7 @@ from devices import *
 import gc
 #a version for sessions with no reward - position is not checked by regular poll. still everything is recorded
 '''---------------------------------------------------- STIM CONFIG--------------------------------------------------'''
-train_period = 5 #a stim train will be triggered in evey X sec #0 to never trigger.
+train_period = 2 #a stim train will be triggered in evey X sec #0 to never trigger.
 train_probability = 0.5
 train_count = None #number of max trains per session, use None for unlimited
 
@@ -110,6 +110,7 @@ def trial_start(event):
         else:
             v.train_active = 0
         set_stim()
+        print_variables(['train_active', ])
         timed_goto_state('recording', 1 * second)
 
 
