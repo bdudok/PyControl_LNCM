@@ -4,22 +4,24 @@ from pyControl.utility import *
 from devices import *
 import gc
 '''---------------------------------------------------- CONFIG--------------------------------------------------'''
-n_zones = 4 #how many zones per lap. high number = little running required between rewards. start with 4
+zones = [50, 150] #list of locations of zones in cm. make it a list (square brackets) even if it's a list of 1
+reward_zone_length = 15 #size of zone in cm. Avoid setting it very small so mouse doesn't miss.
 reward_lockout_time = 5 #s. how long the mouse can take reward before having to find the next zone. start with 5
 reward_lockout_drops = 10 #number of rewards the mouse can take before having to find the next zone. start with 50.
 reward_size = 2 #ul. 2 ul is standard drop size.
-hidden_reward = False
+hidden_reward = True
 v.houselight = True
 '''------------------------------------------------------END CONFIG------------------------------------------------'''
 #calibration
-cm = 41.5 #quad/cm
+cm = 21.5 #quad/cm
 ul = 24 #ms/microliter
-belt_len = 200 #cm
+belt_len = 225 #cm
 
 
-v.reward_zone_distance = int(belt_len/n_zones * cm) #distance between zones
+# v.reward_zone_distance = int(belt_len/n_zones * cm) #distance between zones
+v.reward_zone_list = [int(x * cm) for x in zones]
 v.reward_zone_open = reward_lockout_time*second #reward availability after RZ entry
-v.reward_zone_length = int(max(20, belt_len/n_zones) * cm)
+v.reward_zone_length = int(reward_zone_length * cm)
 v.reward_duration = int(reward_size*ul)  # Time reward solenoid is open for. - calibrated to microliters
 v.poll_resolution = 1000*ms # Time to push events to the search state - mouse can't find new reward zone between polls
 v.force_lap_reset = int(belt_len * cm * 1.1) #lap reset triggered if not reset tag
@@ -27,6 +29,7 @@ v.manual_valve_open = 1*second
 v.max_lick_per_zone = reward_lockout_drops
 v.verbose=0
 v.is_hidden = hidden_reward
+v.pos = 66
 
 #init attributes for use within states:
 v.next_reward = 0 #starting reward zone
@@ -37,6 +40,7 @@ v.reward_zone_lapsed___ = False
 v.last_lap_end = 0 #position at the end of last lap
 v.total_licks = 0
 v.sol_toggle___ = 0
+v.first_lap = True
 
 board = Breakout_1_2() # Breakout board.
 
@@ -90,25 +94,28 @@ def lap_reset(force=False):
     Should work from any state, should not change state
     '''
     # disarm_timer('poll_timer')
+    get_abs_pos()
     v.lap_counter += 1
-    print_variables(['lap_counter', ])
+    print_variables(['pos', 'lap_counter', ])
     v.last_lap_end = belt_pos.position
     #refresh reward zones - not for RF as rewards are in abs_pos
-    # set_reward()
+    v.first_lap = False
+    set_reward()
 
 
-# def get_abs_pos(): not used for RF
-#     '''
-#     return absolute belt position
-#     assumes that the rotary position counter never overflows
-#     this is also the mechanism to check for force reset - any time this is called.
-#     Should work from any state, should not change state
-#     '''
-#     curr_pos = belt_pos.position - v.last_lap_end
-#     if curr_pos > v.force_lap_reset:
-#         lap_reset(force=True)
-#         return curr_pos - v.force_lap_reset
-#     return curr_pos
+
+def get_abs_pos(): # not used for RF
+    '''
+    return absolute belt position
+    assumes that the rotary position counter never overflows
+    this is also the mechanism to check for force reset - any time this is called.
+    Should work from any state, should not change state
+    '''
+    curr_pos = belt_pos.position - v.last_lap_end
+    if curr_pos > v.force_lap_reset:
+        lap_reset(force=True)
+        return curr_pos - v.force_lap_reset
+    v.pos = curr_pos
 
 def get_random_distance(m):
     # return min(m*2, max(m/2, random() * m * 1.5))
@@ -120,13 +127,30 @@ def close_reward_zone():
 
 def set_reward():
     '''
+    Fixed reward zone version.
     Set the position of the next reward zone. we are working one by one, always setting just the next
     Also sets a poll timer
     '''
-    v.next_reward = belt_pos.position + get_random_distance(v.reward_zone_distance)
-    if v.verbose:
-        print_variables(['next_reward', ])
-    set_timer('poll_timer', v.poll_resolution, output_event=True)
+    if not v.first_lap:
+        get_abs_pos()
+        for rz in v.reward_zone_list:
+            if rz > v.pos:
+                v.next_reward = rz
+                if v.verbose:
+                    print_variables(['next_reward', ])
+                set_timer('poll_timer', v.poll_resolution, output_event=True)
+                break
+
+# def set_reward():
+#     '''
+#     Random revard zone version.
+#     Set the position of the next reward zone. we are working one by one, always setting just the next
+#     Also sets a poll timer
+#     '''
+#     v.next_reward = belt_pos.position + get_random_distance(v.reward_zone_distance)
+#     if v.verbose:
+#         print_variables(['next_reward', ])
+#     set_timer('poll_timer', v.poll_resolution, output_event=True)
 
 def run_start():
     belt_pos.record() # Start streaming wheel velocity to computer.
@@ -175,10 +199,13 @@ def searching(event):
     this is the default state. periodically check if the next RZ has been reached.
     '''
     if event == 'entry':
-        set_reward()
         gc.collect()  # this is a good time to garbage collect as nothing urgent can happen
+        set_reward()
     elif event == 'poll_timer':
-        if belt_pos.position > v.next_reward:
+        get_abs_pos()
+        if v.verbose > 1:
+            print_variables(['pos', 'next_reward'])
+        if (v.pos > v.next_reward) and (v.pos < (v.next_reward + v.reward_zone_length)):
             goto_state('reward_zone_entry')
         else:
             set_timer('poll_timer', v.poll_resolution, output_event=True)
@@ -209,7 +236,8 @@ def reward_zone(event):
             close_reward_zone()
     elif event == 'lick_1':
         # print_variables()
-        if belt_pos.position > (v.next_reward + v.reward_zone_length): #abort if zone size passed
+        get_abs_pos()
+        if v.pos > (v.next_reward + v.reward_zone_length): #abort if zone size passed
             print('rz length reached')
             disarm_timer('reward_timer')
             goto_state('searching')
