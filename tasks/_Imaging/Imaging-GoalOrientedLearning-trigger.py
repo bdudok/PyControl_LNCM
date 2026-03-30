@@ -14,7 +14,7 @@ hidden_reward = True
 v.houselight = True
 '''------------------------------------------------------END CONFIG------------------------------------------------'''
 #calibration
-cm = 21.5 #quad/cm
+cm = 41.5 #quad/cm
 ul = 24 #ms/microliter
 belt_len = 225 #cm
 

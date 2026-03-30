@@ -4,9 +4,9 @@ from pyControl.utility import *
 from devices import *
 import gc
 '''---------------------------------------------------- CONFIG--------------------------------------------------'''
-n_zones = 4 #how many zones per lap. high number = little running required between rewards. start with 4
-reward_lockout_time = 5 #s. how long the mouse can take reward before having to find the next zone. start with 5
-reward_lockout_drops = 10 #number of rewards the mouse can take before having to find the next zone. start with 50.
+n_zones = 1 #how many zones per lap. high number = little running required between rewards. start with 4
+reward_lockout_time = 3 #s. how long the mouse can take reward before having to find the next zone. start with 5
+reward_lockout_drops = 20 #number of rewards the mouse can take before having to find the next zone. start with 50.
 reward_size = 2 #ul. 2 ul is standard drop size.
 hidden_reward = False
 v.houselight = True

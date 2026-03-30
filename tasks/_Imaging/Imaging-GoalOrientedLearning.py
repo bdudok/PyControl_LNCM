@@ -13,7 +13,7 @@ hidden_reward = True
 v.houselight = True
 '''------------------------------------------------------END CONFIG------------------------------------------------'''
 #calibration
-cm = 21.5 #quad/cm
+cm = 41.5 #quad/cm
 ul = 24 #ms/microliter
 belt_len = 225 #cm
 
@@ -131,10 +131,11 @@ def set_reward():
     Set the position of the next reward zone. we are working one by one, always setting just the next
     Also sets a poll timer
     '''
+    v.next_reward = 0
     if not v.first_lap:
         get_abs_pos()
         for rz in v.reward_zone_list:
-            if rz > v.pos:
+            if rz > (v.pos+v.reward_zone_length):
                 v.next_reward = rz
                 if v.verbose:
                     print_variables(['next_reward', ])
@@ -205,7 +206,7 @@ def searching(event):
         get_abs_pos()
         if v.verbose > 1:
             print_variables(['pos', 'next_reward'])
-        if (v.pos > v.next_reward) and (v.pos < (v.next_reward + v.reward_zone_length)):
+        if (v.next_reward > 0) and (v.pos > v.next_reward) and (v.pos < (v.next_reward + v.reward_zone_length)):
             goto_state('reward_zone_entry')
         else:
             set_timer('poll_timer', v.poll_resolution, output_event=True)
@@ -240,6 +241,7 @@ def reward_zone(event):
         if v.pos > (v.next_reward + v.reward_zone_length): #abort if zone size passed
             print('rz length reached')
             disarm_timer('reward_timer')
+            v.next_reward = 0
             goto_state('searching')
         if get_current_time() > v.reward_zone_entry_time___ + v.reward_zone_open:
             goto_state('searching')
