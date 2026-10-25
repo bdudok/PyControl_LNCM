@@ -6,7 +6,7 @@ from . import state_machine as sm
 from . import hardware as hw
 from . import utility as ut
 
-VERSION = "2.0.1"
+VERSION = "2.1.1"
 
 
 class pyControlError(BaseException):  # Exception for pyControl errors.
@@ -24,6 +24,7 @@ HARDW_TYP = b"H"  # Harware callback : (time, HARDW_TYP, "", hardware_ID)
 VARBL_TYP = b"V"  # Variable change  : (time, VARBL_TYP, [g]et/user_[s]et/[a]pi_set/[p]rint/s[t]art/[e]nd, json_str)
 WARNG_TYP = b"!"  # Warning          : (time, WARNG_TYP, "", print_string)
 STOPF_TYP = b"X"  # Stop framework   : (time, STOPF_TYP, "", "")
+THRSH_TYP = b"T"  # Threshold        : (time, THRSH_TYP, [s]et)
 
 # Event_queue -----------------------------------------------------------------
 
@@ -88,7 +89,7 @@ def output_data(event):
     content_bytes = str(event.content).encode() if event.content else b""
     message = timestamp + event.type + subtype_byte + content_bytes
     message_len = len(message).to_bytes(2, "little")
-    checksum = sum(message).to_bytes(2, "little")
+    checksum = (sum(message) & 0xFFFF).to_bytes(2, "little")
     usb_serial.send(b"\x07" + checksum + message_len + message)
 
 

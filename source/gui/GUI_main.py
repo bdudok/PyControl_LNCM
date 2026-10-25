@@ -26,13 +26,13 @@ if platform.system() == "Windows":  # Needed on windows to get taskbar icon to d
 
 
 class GUI_main(QtWidgets.QMainWindow):
-    def __init__(self, app, recorder_port=5556):
+    def __init__(self, app, recorder_port=None):
         super().__init__()
         self.setWindowTitle(f"pyControl v{VERSION}")
         self.setGeometry(10, 30, 700, 800)  # Left, top, width, height.
 
         # Variables
-        self.recorder_port = recorder_port
+        self.recorder_port = recorder_port  # Port for set/go/stop requests from the Recorder app, None to disable.
         self.refresh_interval = 1000  # How often refresh method is called when not running (ms).
         self.available_tasks = None  # List of task file names in tasks folder.
         self.available_ports = None  # List of available serial ports.
@@ -183,8 +183,8 @@ class GUI_main(QtWidgets.QMainWindow):
         # this function gets called every second. Normally we would use get_setting("folder","tasks")
         # but there is no need to constantly be rereading the settings.json file that isn't changing
         # so we use this self.task_directory variable that is only updated when a new user settting is saved
-        if self.run_task_tab.listening:
-            return None
+        if self.run_task_tab.listening:  # Don't refresh while a Recorder request is being handled.
+            return
         tasks = self.get_nested_file_list(self.task_directory, ".py")
         self.available_tasks_changed = tasks != self.available_tasks
         if self.available_tasks_changed:
@@ -233,6 +233,7 @@ def launch_GUI(recorder_port=None):
     app = QtWidgets.QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setWindowIcon(QtGui.QIcon("source/gui/icons/logo.svg"))
+    app.setAttribute(QtCore.Qt.ApplicationAttribute.AA_DontShowIconsInMenus, False)  # enable icons in mac menus
     font = QtGui.QFont()
     font.setPixelSize(get_setting("GUI", "ui_font_size"))
     app.setFont(font)

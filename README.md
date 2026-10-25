@@ -1,5 +1,5 @@
 # PyControl
-Clone of the actual PyControl http://pycontrol.readthedocs.io/ Version: v2.0.1
+Clone of the actual PyControl http://pycontrol.readthedocs.io/ Version: v2.1.1
 Modified in LNCM / Dudok lab
 
 ##Includes:

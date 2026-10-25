@@ -1,4 +1,49 @@
 -------------------------------------------------------------------------------
+Version 2.1.1 2025-12-02
+-------------------------------------------------------------------------------
+
+Tools:
+
+- Improved Rsync_aligner
+
+Devices:
+
+- Simplified UART_handler device; now requires MicroPython >= 1.26.
+
+-------------------------------------------------------------------------------
+Version 2.1 2025-11-11
+-------------------------------------------------------------------------------
+
+GUI:
+
+- Various bug fixes & UI improvements.
+
+Framework:
+
+- Analog_input and Rotary_encoder now support multiple thresholds for generating framework events.
+- Rsync pulses can now be output on multiple pins.
+- Fixed bug where stepped and pulsed sounds started after a short delay.
+
+Devices:
+
+- Added GridMaze device class.
+- Added UART_handler device to generate framework events when UART message received.
+
+-------------------------------------------------------------------------------
+Version 2.0.2 2024-06-13
+-------------------------------------------------------------------------------
+
+GUI:
+
+- Various bug fixes.
+
+- Specified UTF-8 encoding of data files to allow for non ASCII characters in variable names.
+
+Devices:
+
+- Added load cell class.
+
+-------------------------------------------------------------------------------
 Version 2.0.1 2024-01-12
 -------------------------------------------------------------------------------
 

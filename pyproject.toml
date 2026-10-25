@@ -1,2 +1,27 @@
+# Environment for the pyControl GUI (uv): run `uv sync`, then `uv run pyControl_GUI.pyw`.
+[project]
+name = "pycontrol-lncm"
+version = "2.1.1"
+requires-python = "==3.11.*"
+dependencies = [
+    "numpy",
+    "pyserial",
+    "pyqtgraph",
+    "PyQt6",
+    "pyzmq",  # remote start from the Recorder app
+]
+
+[dependency-groups]
+# tools/ (data import, rsync alignment, plotting); installed by uv sync by default
+tools = [
+    "pandas",
+    "matplotlib",
+    "scikit-learn",
+]
+
+[tool.uv]
+package = false
+default-groups = ["tools"]
+
 [tool.black]
 line-length = 120

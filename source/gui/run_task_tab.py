@@ -1,6 +1,8 @@
 import os
 import time
+import json
 import importlib
+import zmq
 from datetime import datetime
 from pyqtgraph.Qt import QtGui, QtCore, QtWidgets
 from serial import SerialException, SerialTimeoutException
@@ -12,8 +14,6 @@ from source.gui.plotting import Task_plot
 from source.gui.utility import init_keyboard_shortcuts, NestedMenu, TaskInfo
 from source.gui.hardware_variables_dialog import set_hardware_variables, hw_vars_defined_in_setup
 
-import json
-import zmq
 
 # Run_task_gui ------------------------------------------------------------------------
 
@@ -37,17 +37,10 @@ class Run_task_tab(QtWidgets.QWidget):
         self.user_API = None  # Overwritten by user API class.
         self.running = False
         self.controls_dialog = None
+        self.listening = False  # True while a request from the Recorder is being handled.
 
         pad = 3  # Spacing round GUI elements in groupboxes.
 
-        #zmq variables
-        self.recorder_pollinterval = 1000
-        port = self.parent().recorder_port
-        if port is not None:
-            context = zmq.Context()
-            self.server = context.socket(zmq.REP)
-            self.server.bind(f"tcp://*:{port}")
-        self.listening = False
         # Setup groupbox
 
         self.board_groupbox = QtWidgets.QGroupBox("Setup")
@@ -123,44 +116,38 @@ class Run_task_tab(QtWidgets.QWidget):
 
         self.upload_button.clicked.connect(self.setup_task)
 
-        #Remote groubox
+        # Remote groupbox: buttons that trigger the task's manual valve and stim events.
+
         self.remote_groupbox = QtWidgets.QGroupBox("Remote")
-        # add 3 buttons:
-        # a button that executes a reward
-        # a button that opens the valve for the time in v.manual_valve_open
-        # and a toggle
-        self.man_rew_button = QtWidgets.QPushButton("Reward")
-        self.man_open_button = QtWidgets.QPushButton("Open for t")
-        self.man_toggle_button = QtWidgets.QPushButton("Toggle")
-        self.man_stim_button = QtWidgets.QPushButton("PhotoStim")
-        self.remotegroup_layout = QtWidgets.QHBoxLayout()
-        self.remotegroup_layout.addWidget(self.man_rew_button)
-        self.remotegroup_layout.addWidget(self.man_open_button)
-        self.remotegroup_layout.addWidget(self.man_toggle_button)
-        self.remotegroup_layout.addWidget(self.man_stim_button)
-        self.remote_groupbox.setLayout(self.remotegroup_layout)
+        remotegroup_layout = QtWidgets.QHBoxLayout(self.remote_groupbox)
+        for label, event_name in (
+            ("Reward", "manual_reward"),
+            ("Open for t", "manual_open"),  # Opens the valve for v.manual_valve_open.
+            ("Toggle", "manual_toggle"),
+            ("PhotoStim", "manual_stim"),
+        ):
+            button = QtWidgets.QPushButton(label)
+            button.clicked.connect(lambda checked, event_name=event_name: self.trigger_manual_event(event_name))
+            remotegroup_layout.addWidget(button)
 
-        self.man_rew_button.clicked.connect(self.man_reward)
-        self.man_open_button.clicked.connect(self.man_open)
-        self.man_toggle_button.clicked.connect(self.man_toggle)
-        self.man_stim_button.clicked.connect(self.man_stim)
+        # Sync groupbox: answers set/go/stop requests from the Recorder app while armed.
 
-        # Sync broupbox
         self.sync_groupbox = QtWidgets.QGroupBox("Synchronous recording")
-        self.syncgroup_layout = QtWidgets.QHBoxLayout()
-        # to receive zmq calls for synchronized experiments
-        # button to 'Arm' for recording
         self.arm_toggle = QtWidgets.QPushButton()
         self.arm_toggle.setCheckable(True)
-        self.set_switch_state('arm')
-        self.syncgroup_layout.addWidget(self.arm_toggle)
         self.arm_toggle.clicked.connect(self.arm)
-        # label to display prefix
-        self.filename_label = QtWidgets.QLabel('Upload task before arming', )
+        self.filename_label = QtWidgets.QLabel("Upload task before arming")
+        syncgroup_layout = QtWidgets.QHBoxLayout(self.sync_groupbox)
+        syncgroup_layout.addWidget(self.arm_toggle)
+        syncgroup_layout.addWidget(self.filename_label)
+        self.set_switch_state("arm")
 
-        self.syncgroup_layout.addWidget(self.filename_label)
-        if self.parent().recorder_port is not None:
-            self.sync_groupbox.setLayout(self.syncgroup_layout)
+        if self.GUI_main.recorder_port is not None:
+            self.recorder_socket = zmq.Context.instance().socket(zmq.REP)
+            self.recorder_socket.setsockopt(zmq.LINGER, 0)
+            self.recorder_socket.bind(f"tcp://*:{self.GUI_main.recorder_port}")
+            self.recorder_timer = QtCore.QTimer()  # Polls the socket while armed.
+            self.recorder_timer.timeout.connect(self.listen)
 
         # Session groupbox.
 
@@ -201,7 +188,8 @@ class Run_task_tab(QtWidgets.QWidget):
         top_layout.addWidget(self.board_groupbox)
         top_layout.addWidget(self.task_groupbox)
         top_layout.addWidget(self.file_groupbox)
-        top_layout.addWidget(self.sync_groupbox)
+        if self.GUI_main.recorder_port is not None:
+            top_layout.addWidget(self.sync_groupbox)
         top_layout.setContentsMargins(0, 0, 0, 0)
 
         # Resizable log and plots layout.
@@ -211,13 +199,12 @@ class Run_task_tab(QtWidgets.QWidget):
         self.vsplitter.setSizes([1, 2])
 
         # Main layout
-
         self.run_layout = QtWidgets.QGridLayout()
         self.run_layout.addWidget(self.top_section, 0, 0)
         self.run_layout.addWidget(self.remote_groupbox, 1, 0)
         self.run_layout.addWidget(self.session_groupbox, 2, 0)
         self.run_layout.addWidget(self.vsplitter, 3, 0)
-        self.run_layout.setRowStretch(2, 1)
+        self.run_layout.setRowStretch(3, 1)
 
         self.setLayout(self.run_layout)
 
@@ -238,110 +225,101 @@ class Run_task_tab(QtWidgets.QWidget):
         self.disconnect()  # Set initial state as disconnected.
 
     # General methods
-
-    #custom buttons
-    def man_reward(self):
-        if self.board.framework_running:
-            self.board.trigger_event('manual_reward')
-
-    def man_open(self):
-        if self.board.framework_running:
-            self.board.trigger_event('manual_open')
-
-
-    def man_toggle(self):
-        if self.board.framework_running:
-            self.board.trigger_event('manual_toggle')
-
-    def man_stim(self):
-        if self.board.framework_running:
-            self.board.trigger_event('manual_stim')
-
     def print_to_log(self, print_string, end="\n"):
         self.log_textbox.moveCursor(QtGui.QTextCursor.MoveOperation.End)
         self.log_textbox.insertPlainText(print_string + end)
         self.log_textbox.moveCursor(QtGui.QTextCursor.MoveOperation.End)
         self.GUI_main.app.processEvents()  # To update gui during long operations that print progress.
 
-    def arm(self):
-        #the two states of the button. nb a 3rd state is controlled by the client.
-        self.armed = self.arm_toggle.isChecked()
-        if self.armed:
-            self.set_switch_state('armed')
-            #will poll request queue periodically
-            self.zmqtimer = QtCore.QTimer()
-            self.zmqtimer.setInterval(self.recorder_pollinterval)
-            self.zmqtimer.timeout.connect(self.listen)
-            self.zmqtimer.start()
-
+    def trigger_manual_event(self, event_name):
+        if not (self.board and self.board.framework_running):
+            return
+        if event_name in self.board.sm_info.events:
+            self.board.trigger_event(event_name)
         else:
-            if self.board is not None:
-                self.arm_toggle.setStyleSheet("background-color : red")
-                self.arm_toggle.setText('Arm')
-                self.zmqtimer.stop()
-            else:
-                self.arm_toggle.setChecked(False)
+            self.print_to_log(f"\nTask has no '{event_name}' event.")
+
+    # Recorder integration.
+
+    def arm(self):
+        if self.arm_toggle.isChecked():
+            self.set_switch_state("armed")
+            self.recorder_timer.start(100)
+        else:
+            self.set_switch_state("arm")
+            self.recorder_timer.stop()
 
     def set_switch_state(self, state):
-        # we will have a base state when task can bemodified
-        # after 'arming', listening to requests from client
-        if state == 'armed':
-            self.arm_toggle.setStyleSheet("background-color : green")
-            self.arm_toggle.setText('Armed')
-        elif state == 'arm':
-            self.arm_toggle.setStyleSheet("background-color : red")
-            self.arm_toggle.setText('Arm')
-        elif state == 'running':
-            self.arm_toggle.setStyleSheet("background-color : blue")
-            self.arm_toggle.setText('Acquiring')
+        # 'arm': not listening to the Recorder; 'armed': listening; 'running': task started by the Recorder.
+        color, text = {"arm": ("red", "Arm"), "armed": ("green", "Armed"), "running": ("blue", "Acquiring")}[state]
+        self.arm_toggle.setStyleSheet(f"background-color : {color}")
+        self.arm_toggle.setText(text)
 
     def listen(self):
-        self.listening=True
-        # poll the request queue, and respond if anything.
-        # not in cycle, non-blocking, called periodically by a Qt timer
-        if (self.server.poll(self.recorder_pollinterval*0.01) & zmq.POLLIN) != 0:
-            request = json.loads(self.server.recv_json())
-            print(request)
-            if 'set' in request:
-                #do stuff to set up the saving path
-                if self.board is None or self.task_select.text() == "select task":
-                    message = {'set': False, 'log': 'board or task not set up'}
-                    self.server.send_json(json.dumps(message))
-                    self.listen()
-                self.set_prefix(request['prefix'])
-                self.set_handle(request['handle'])
-                self.filename_label.setText(request['prefix'])
-                logstring = f'Task:{self.task_select.text()}'
-                message = {'set': True, 'log': logstring}
-                self.server.send_json(json.dumps(message))
-                self.arm_toggle.setEnabled(False)
-                self.filename_label.setText('START synchronous recording in Recorder')
-            elif 'go' in request:
-                self.set_switch_state('running')
-                if not self.fresh_task:
-                    self.setup_task()
-                self.start_task()
-                message = {'go': True}
-                self.server.send_json(json.dumps(message))
-                self.filename_label.setText('STOP synchronous recording in Recorder')
-            elif 'stop' in request:
-                self.stop_task()
-                self.set_switch_state('arm')
-                self.arm_toggle.setEnabled(True)
-                self.arm_toggle.setChecked(True)
-                self.arm()
-                logstring = f'{0} laps, {0} rewards'
-                message = {'stop': True, 'log': logstring}
-                self.server.send_json(json.dumps(message))
-                self.filename_label.setText('Ready for next session')
-        self.listening = False
+        """Answer a request from the Recorder if one is waiting. Every request gets exactly one reply,
+        otherwise the REP socket can't receive again and the Recorder's request times out."""
+        if not self.recorder_socket.poll(0) & zmq.POLLIN:
+            return
+        self.listening = True
+        try:
+            request = self.recorder_socket.recv_json()
+            command = None
+            try:
+                # The Recorder sends JSON strings encoded as JSON, so they are decoded twice.
+                request = json.loads(request)
+                command = next((c for c in ("set", "go", "stop") if c in request), None)
+                if command is None:
+                    reply = {"log": f"pyControl: unknown request {request}"}
+                else:
+                    reply = getattr(self, f"recorder_{command}")(request)
+            except Exception as e:
+                self.recorder_socket.send_json(json.dumps({command: False, "log": f"pyControl error: {e!r}"}))
+                raise
+            self.recorder_socket.send_json(json.dumps(reply))
+        finally:
+            self.listening = False
 
-    def set_prefix(self, prefix):
-        self.subject_text.setText(prefix)
+    def recorder_set(self, request):
+        if self.running:
+            return {"set": False, "log": "pyControl: a task is already running"}
+        if not (self.board and self.uploaded):
+            return {"set": False, "log": "pyControl: board or task not set up"}
+        if not self.fresh_task:
+            self.setup_task()  # Reset task variables now, so 'go' doesn't stop at the reset dialog.
+            if not self.fresh_task:
+                return {"set": False, "log": "pyControl: task reset failed"}
+        self.subject_text.setText(request["prefix"])
+        self.data_dir_text.setText(os.path.dirname(request["handle"]))
+        self.custom_dir = True
+        self.arm_toggle.setEnabled(False)
+        self.filename_label.setText("START synchronous recording in Recorder")
+        return {"set": True, "log": f"Task:{self.task}"}
 
-    def set_handle(self, handle):
-        self.data_dir_text.setText(os.path.dirname(handle))
+    def recorder_go(self, request):
+        if self.running:
+            return {"go": False, "log": "pyControl: a task is already running"}
+        if not self.uploaded:
+            return {"go": False, "log": "pyControl: task not uploaded"}
+        # The data folder is created by the scope, which starts before the treadmill.
+        if not self.test_data_path():
+            return {"go": False, "log": f"pyControl: data folder {self.data_dir} does not exist"}
+        if not self.fresh_task:
+            self.setup_task()
+        self.start_task()
+        self.set_switch_state("running")
+        self.filename_label.setText("STOP synchronous recording in Recorder")
+        return {"go": True}
 
+    def recorder_stop(self, request):
+        if self.running:
+            self.stop_task()
+            log = f"Task:{self.task} stopped"
+        else:
+            log = f"Task:{self.task} was not running when stop was received"
+        self.arm_toggle.setEnabled(True)
+        self.set_switch_state("armed")
+        self.filename_label.setText("Ready for next session")
+        return {"stop": True, "log": log}
 
     def test_data_path(self):
         # Checks whether data dir and subject ID are valid.
@@ -357,9 +335,9 @@ class Run_task_tab(QtWidgets.QWidget):
             return False
 
     def refresh(self):
-        if self.listening:
-            return None
         # Called regularly when framework not running.
+        if self.listening:
+            return
         if self.GUI_main.setups_tab.available_setups_changed:
             self.board_select.clear()
             if self.GUI_main.setups_tab.setup_names:
@@ -505,7 +483,7 @@ class Run_task_tab(QtWidgets.QWidget):
         try:
             if not self.uploaded:
                 self.task_hash = _djb2_file(os.path.join(self.GUI_main.task_directory, task + ".py"))
-                self.filename_label.setText('Arm to receive filename')
+                self.filename_label.setText("Arm to receive filename")
             self.start_button.setEnabled(False)
             self.controls_button.setEnabled(False)
             self.repaint()

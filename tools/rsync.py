@@ -2,7 +2,7 @@
 # random inter-pulse intervals.
 # https://pycontrol.readthedocs.io/en/latest/user-guide/synchronisation
 # Dependencies:  Python 3, Numpy, Matplotlib, Scikit-learn.
-# (c) Thomas Akam 2018-2023. Released under the GPL-3 open source licence.
+# (c) Thomas Akam 2018-2025. Released under the GPL-3 open source licence.
 
 import numpy as np
 import pylab as plt
@@ -72,9 +72,7 @@ class Rsync_aligner:
         intervals_B = np.diff(pulse_times_B) * units_B  # Inter-pulse intervals for sequence B
         intervals_B2 = intervals_B**2
         # Find alignments of chunks which minimise sum of squared errors.
-        chunk_starts_A = np.arange(
-            0, len(pulse_times_A) - chunk_size, chunk_size
-        )  # Start indices of each chunk of sequence A.
+        chunk_starts_A = np.arange(0, len(pulse_times_A) - chunk_size, chunk_size)  # Start indices of each chunk of A.
         chunk_starts_B = np.zeros(chunk_starts_A.shape, int)  # Start indicies of corresponding chunks in B.
         chunk_min_mse = np.zeros(chunk_starts_A.shape)  # Mean squared error for each chunks best alignment.
         chunk_2nd_mse = np.zeros(chunk_starts_A.shape)  # Mean sqared error for each chunks 2nd best alignment.
@@ -100,37 +98,20 @@ class Rsync_aligner:
         gmm.fit(log_mse)
         valid_matches = gmm.predict(log_mse) == np.argmin(gmm.means_)  # True for chunks which are valid matches.
         # Make arrays of corresponding times.
-        cor_times_A = np.full(pulse_times_B.shape, np.nan)  # A pulse times corresponding to each B pulse.
         cor_times_B = np.full(pulse_times_A.shape, np.nan)  # B pulse times corresponding to each A pulse.
         for csA, csB, valid in zip(chunk_starts_A, chunk_starts_B, valid_matches):
             if valid:
-                cor_times_A[csB : csB + chunk_size] = pulse_times_A[csA : csA + chunk_size]
                 cor_times_B[csA : csA + chunk_size] = pulse_times_B[csB : csB + chunk_size]
-        # Store pulse times, their correspondences and units.
-        self.pulse_times_A = pulse_times_A
-        self.pulse_times_B = pulse_times_B
-        self.cor_times_A = cor_times_A
-        self.cor_times_B = cor_times_B
-        self.units_A = units_A
-        self.units_B = units_B
-        # Compute variables used for extrapolating beyond first/last matching pulse.
-        diff_cor_times_B = np.diff(cor_times_B)
-        self.dAdB = np.sum(np.diff(pulse_times_A)[~np.isnan(diff_cor_times_B)]) / np.sum(
-            diff_cor_times_B[~np.isnan(diff_cor_times_B)]
-        )  # Empirical units_A/units_B from matched inter-pulse intervals.
-        matched_pulse_times_A = cor_times_A[~np.isnan(cor_times_A)]
-        matched_pulse_times_B = cor_times_B[~np.isnan(cor_times_B)]
-        self.first_matched_time_A = matched_pulse_times_A[0]
-        self.last_matched_time_A = matched_pulse_times_A[-1]
-        self.first_matched_time_B = matched_pulse_times_B[0]
-        self.last_matched_time_B = matched_pulse_times_B[-1]
+        # Store times of matched sync pulses.
+        self.matched_times_A = pulse_times_A[~np.isnan(cor_times_B)]
+        self.matched_times_B = cor_times_B[~np.isnan(cor_times_B)]
+        # Store empirical units_A/units_B from matched inter-pulse intervals.
+        self.dAdB = np.sum(np.diff(self.matched_times_A)) / np.sum(np.diff(self.matched_times_B))
         # Check quality of alignment.
-        separation_OK = np.abs(gmm.means_[0] - gmm.means_[1])[0] > 3 * np.sum(
-            np.sqrt(gmm.covariances_)
-        )  # Difference in GMM means > 3 x sum of standard deviations.
-        order_OK = (np.nanmin(np.diff(cor_times_A)) > 0) and (
-            np.nanmin(np.diff(cor_times_A)) > 0
-        )  # Corresponding times are monotonically increacing.
+        #  Check Difference in GMM means > 3 x sum of standard deviations.
+        separation_OK = np.abs(gmm.means_[0] - gmm.means_[1])[0] > 3 * np.sum(np.sqrt(gmm.covariances_))
+        #  Check corresponding times are monotonically increacing.
+        order_OK = np.all(np.diff(self.matched_times_A) > 0) and np.all(np.diff(self.matched_times_B) > 0)
         if not (separation_OK and order_OK):
             if raise_exception:
                 raise RsyncError("No match found between inter-pulse interval sequences.")
@@ -146,7 +127,7 @@ class Rsync_aligner:
             plt.xlabel("Log mean squared error")
             plt.ylabel("# chunks")
             plt.subplot2grid((3, 3), (0, 2), rowspan=1, colspan=1)
-            timing_errors = np.diff(cor_times_A) - np.diff(pulse_times_B)
+            timing_errors = np.diff(cor_times_B) - np.diff(pulse_times_A)
             plt.hist(timing_errors[~np.isnan(timing_errors)], 100)
             plt.yscale("log", nonpositive="clip")
             plt.xlabel("Inter-pulse interval\ndiscrepancy (ms)")
@@ -163,12 +144,12 @@ class Rsync_aligner:
         before the first matched sync pulse and after the last matched sync pulse will be
         extrapolated, if False they will be nans.
         """
-        times_B = np.interp(times_A, self.pulse_times_A, self.cor_times_B, left=np.nan, right=np.nan)
+        times_B = np.interp(times_A, self.matched_times_A, self.matched_times_B, left=np.nan, right=np.nan)
         if extrapolate:
-            pf = times_A < self.first_matched_time_A  # Mask indicating times pre first matched pulse.
-            times_B[pf] = (times_A[pf] - self.first_matched_time_A) / self.dAdB + self.first_matched_time_B
-            pl = times_A > self.last_matched_time_A  # Mask indicating times post last matched pulse.
-            times_B[pl] = (times_A[pl] - self.last_matched_time_A) / self.dAdB + self.last_matched_time_B
+            pf = times_A < self.matched_times_A[0]  # Mask indicating times pre first matched pulse.
+            times_B[pf] = (times_A[pf] - self.matched_times_A[0]) / self.dAdB + self.matched_times_B[0]
+            pl = times_A > self.matched_times_A[-1]  # Mask indicating times post last matched pulse.
+            times_B[pl] = (times_A[pl] - self.matched_times_A[-1]) / self.dAdB + self.matched_times_B[-1]
         return times_B
 
     def B_to_A(self, times_B, extrapolate=True):
@@ -176,12 +157,12 @@ class Rsync_aligner:
         before the first matched sync pulse and after the last matched sync pulse will be
         extrapolated, if False they will be nans.
         """
-        times_A = np.interp(times_B, self.pulse_times_B, self.cor_times_A, left=np.nan, right=np.nan)
+        times_A = np.interp(times_B, self.matched_times_B, self.matched_times_A, left=np.nan, right=np.nan)
         if extrapolate:
-            pf = times_B < self.first_matched_time_B  # Mask indicating times pre first matched pulse.
-            times_A[pf] = (times_B[pf] - self.first_matched_time_B) * self.dAdB + self.first_matched_time_A
-            pl = times_B > self.last_matched_time_B  # Mask indicating times post last matched pulse.
-            times_A[pl] = (times_B[pl] - self.last_matched_time_B) * self.dAdB + self.last_matched_time_A
+            pf = times_B < self.matched_times_B[0]  # Mask indicating times pre first matched pulse.
+            times_A[pf] = (times_B[pf] - self.matched_times_B[0]) * self.dAdB + self.matched_times_A[0]
+            pl = times_B > self.matched_times_B[-1]  # Mask indicating times post last matched pulse.
+            times_A[pl] = (times_B[pl] - self.matched_times_B[-1]) * self.dAdB + self.matched_times_A[-1]
         return times_A
 
 
@@ -194,10 +175,7 @@ def simulate_pulses(n_pulse=1000, interval=[100, 1900], units_B=2, noise_SD=2, m
     pulse_times_B = units_B * (pulse_times_A + np.cumsum(np.random.normal(scale=noise_SD, size=n_pulse)))
     if missing_pulses:
         pulse_times_A = np.hstack(
-            [
-                pulse_times_A[int(n_pulse * 0.05) : int(n_pulse * 0.21)],
-                pulse_times_A[int(n_pulse * 0.33) :] + 2e5,
-            ]
+            [pulse_times_A[int(n_pulse * 0.05) : int(n_pulse * 0.21)], pulse_times_A[int(n_pulse * 0.33) :]]
         )
         pulse_times_B = np.hstack(
             [

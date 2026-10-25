@@ -14,3 +14,4 @@ ErrorLog.txt
 #tasks/
 #!tasks/example
 /.idea/encodings.xml
+.venv/
