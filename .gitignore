@@ -15,3 +15,6 @@ ErrorLog.txt
 #!tasks/example
 /.idea/encodings.xml
 .venv/
+
+# PyCharm project files
+.idea/
