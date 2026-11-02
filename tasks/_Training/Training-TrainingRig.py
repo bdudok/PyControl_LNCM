@@ -82,7 +82,6 @@ events = [
     'poll_timer', 'reward_timer',  # internal timers
     'sol_on', 'sol_off',  # for control
     'manual_reward', 'manual_open', 'manual_toggle',  # for gui controls
-    'manual_stim',  # for optogenetics
     # 'rsync',  # 'frame_trigger'#utility 'started_running', 'stopped_running',
 ]
 
@@ -149,9 +148,10 @@ def run_start():
 
 
 def run_end():
-    session_output.pulse(10, duty_cycle=50, n_pulses=1)  # stop microscope
+    # session_output.pulse(10, duty_cycle=50, n_pulses=1)  # stop microscope
     # led_power.off()
     # led_control.off()
+    pass
 
 
 # State behaviour functions.
@@ -177,8 +177,6 @@ def all_states(event):
             publish_event('sol_on')
         else:
             publish_event('sol_off')
-    elif event == 'manual_stim':
-        opto_stim_ttl.pulse(10, duty_cycle=50, n_pulses=1)
 
 
 def searching(event):

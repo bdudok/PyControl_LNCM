@@ -208,7 +208,6 @@ def searching(event):
 def reward_zone_entry(event):
     '''Reset lick count for current rz, starts timeout, and waits for licks'''
     if event == 'entry':
-        disarm_timer('poll_timer')
         v.lick_count___ = 0
         v.reward_zone_entry_time___ = get_current_time()
         v.reward_zone_lapsed___ = False
