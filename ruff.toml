@@ -1,0 +1,5 @@
+# Same rules as LNCM-lib, but task files may use star imports (from devices import *), as pyControl tasks are written.
+extend = "../LNCM-lib/pyproject.toml"
+
+[lint.extend-per-file-ignores]
+"tasks/**" = ["F401", "F403", "F405"]
