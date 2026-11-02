@@ -20,14 +20,12 @@ powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | ie
 Get the code and build the environment. uv downloads Python 3.11 by itself when needed.
 
 ```
-git clone https://github.com/bdudok/PyControl.git
+git clone https://github.com/bdudok/PyControl_LNCM.git PyControl
 cd PyControl
-git switch pycontrol-v2.1.1
 uv sync
 ```
 
-The branch is not merged yet; after that, `git switch` won't be needed. `uv sync` also installs the packages
-for `tools/` (pandas, matplotlib, scikit-learn).
+`uv sync` also installs the packages for `tools/` (pandas, matplotlib, scikit-learn).
 
 Check it:
 
