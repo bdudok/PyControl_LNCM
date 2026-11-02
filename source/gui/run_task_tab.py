@@ -288,12 +288,20 @@ class Run_task_tab(QtWidgets.QWidget):
             self.setup_task()  # Reset task variables now, so 'go' doesn't stop at the reset dialog.
             if not self.fresh_task:
                 return {"set": False, "log": "pyControl: task reset failed"}
+        log = f"Task:{self.task}"
+        if "houselight" in request:  # Set on the board directly, the task file is not uploaded again.
+            if "houselight" not in self.board.sm_info.variables:
+                log += ", task has no houselight variable"
+            elif self.board.set_variable("houselight", request["houselight"]):
+                log += f", houselight:{request['houselight']}"
+            else:
+                return {"set": False, "log": "pyControl: could not set houselight"}
         self.subject_text.setText(request["prefix"])
         self.data_dir_text.setText(os.path.dirname(request["handle"]))
         self.custom_dir = True
         self.arm_toggle.setEnabled(False)
         self.filename_label.setText("START synchronous recording in Recorder")
-        return {"set": True, "log": f"Task:{self.task}"}
+        return {"set": True, "log": log}
 
     def recorder_go(self, request):
         if self.running:
