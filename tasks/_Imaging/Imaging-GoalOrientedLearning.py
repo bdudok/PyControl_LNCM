@@ -7,7 +7,7 @@ import gc
 zones = [50, 150] #list of locations of zones in cm. make it a list (square brackets) even if it's a list of 1
 reward_zone_length = 15 #size of zone in cm. Avoid setting it very small so mouse doesn't miss.
 reward_lockout_time = 5 #s. how long the mouse can take reward before having to find the next zone. start with 5
-reward_lockout_drops = 10 #number of rewards the mouse can take before having to find the next zone. start with 50.
+reward_lockout_drops = 5 #number of rewards the mouse can take before having to find the next zone. start with 50.
 reward_size = 2 #ul. 2 ul is standard drop size.
 hidden_reward = True
 v.houselight = True
