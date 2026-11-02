@@ -94,7 +94,7 @@ def lap_reset(force=False):
     Should work from any state, should not change state
     '''
     # disarm_timer('poll_timer')
-    get_abs_pos()
+    v.pos = belt_pos.position - v.last_lap_end # not get_abs_pos: that calls this function until last_lap_end is updated
     v.lap_counter += 1
     print_variables(['pos', 'lap_counter', ])
     v.last_lap_end = belt_pos.position
