@@ -101,8 +101,9 @@ class Data_logger:
         human readable data strings are passed to it."""
         if self.data_file:
             self.write_to_file(new_data)
-        if self.print_func:
-            self.print_func(self.data_to_string(new_data, prettify=True), end="")
+        if self.print_func:  # Rsync pulses are too frequent for the log; they are still saved and plotted.
+            to_print = [nd for nd in new_data if not (nd.type == MsgType.EVENT and nd.subtype == "sync")]
+            self.print_func(self.data_to_string(to_print, prettify=True), end="")
 
     def write_to_file(self, new_data):
         data_string = self.data_to_string(new_data)
