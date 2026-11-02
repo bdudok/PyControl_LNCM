@@ -53,7 +53,7 @@ target_reached_trigger = Analog_trigger(
     rising_event="reached_target",
     falling_event="reached_target",
 )
-belt_pos = Rotary_encoder(name='pos', sampling_rate=15, output='position', threshold=100,
+belt_pos = Rotary_encoder(name='pos', sampling_rate=15, output='position',
                           triggers=[target_reached_trigger],)
                           # rising_event='started_running',
                           # falling_event='stopped_running')

@@ -32,7 +32,7 @@ board = Breakout_1_2()  # Breakout board.
 # Instantiate hardware - would normally be in a seperate hardware definition file.
 
 # Running wheel must be plugged into port 1 of breakout board.
-belt_pos = Rotary_encoder(name='pos', sampling_rate=15, output='position', threshold=100, )
+belt_pos = Rotary_encoder(name='pos', sampling_rate=15, output='position')
 
 # lap_reset_tag_cp = Digital_input(board.port_3.DIO_A, rising_event='RFID_CP', falling_event=None, debounce=5, pull='down')
 # cp has no signal, use TIR pin instead

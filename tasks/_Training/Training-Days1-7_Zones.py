@@ -56,7 +56,7 @@ board = Breakout_1_2() # Breakout board.
 # Instantiate hardware - would normally be in a seperate hardware definition file.
 
 # Running wheel must be plugged into port 1 of breakout board.
-belt_pos = Rotary_encoder(name='pos', sampling_rate=15, output='position', threshold=100,)
+belt_pos = Rotary_encoder(name='pos', sampling_rate=15, output='position')
                           # rising_event='started_running',
                           # falling_event='stopped_running')
 
