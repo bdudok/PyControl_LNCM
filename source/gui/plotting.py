@@ -1,11 +1,28 @@
 import time
 from datetime import timedelta
+from functools import lru_cache
 import numpy as np
 import pyqtgraph as pg
 from pyqtgraph.Qt import QtGui, QtWidgets, QtCore
 from source.gui.settings import get_setting
 from source.gui.utility import detachableTabWidget
 from source.communication.pycboard import MsgType
+
+MIN_LUMINANCE = 0.25  # Lowest relative luminance (0-1) for plot colours, as the plot background is black.
+
+
+@lru_cache(maxsize=None)
+def plot_colour(index, hues=9):
+    """Colour from pg.intColor, mixed with white as much as needed to be visible on black. This
+    mainly affects blue and purple, which are dark at full saturation."""
+    rgb = np.array(pg.intColor(index, hues).getRgb()[:3]) / 255
+    for white in np.linspace(0, 1, 41):
+        mixed = rgb + white * (1 - rgb)
+        linear = np.where(mixed <= 0.04045, mixed / 12.92, ((mixed + 0.055) / 1.055) ** 2.4)  # Remove sRGB gamma.
+        if linear @ [0.2126, 0.7152, 0.0722] >= MIN_LUMINANCE:
+            break
+    return QtGui.QColor(*(mixed * 255).round().astype(int).tolist())
+
 
 # ----------------------------------------------------------------------------------------
 # Task_plot
@@ -142,7 +159,7 @@ class States_plot:
         self.axis.setYRange(min(self.state_IDs), max(self.state_IDs), padding=0.1)
         self.n_colours = len(sm_info.states) + len(sm_info.events)
         self.plots = {
-            ID: self.axis.plot(pen=pg.mkPen(pg.intColor(ID, self.n_colours), width=3)) for ID in self.state_IDs
+            ID: self.axis.plot(pen=pg.mkPen(plot_colour(ID, self.n_colours), width=3)) for ID in self.state_IDs
         }
         self.axis.getAxis("right").setWidth(self.task_plot.axiswidth)
         self.axis.getAxis("right").setStyle(hideOverlappingLabels=False)
@@ -225,7 +242,7 @@ class Events_plot:
         self.plot.setData(
             x=self.data[:, 0] - run_time,
             y=self.data[:, 1],
-            symbolBrush=[pg.intColor(ID) for ID in self.data[:, 1]],
+            symbolBrush=[plot_colour(int(ID)) for ID in self.data[:, 1]],
         )
 
 
@@ -252,7 +269,7 @@ class Analog_plot:
         self.axis.clear()
         self.legend = self.axis.addLegend(offset=(10, 10))
         self.plots = {
-            ID: self.axis.plot(name=ai["name"], pen=pg.mkPen(pg.intColor(i, len(self.inputs))))
+            ID: self.axis.plot(name=ai["name"], pen=pg.mkPen(plot_colour(i, len(self.inputs))))
             for i, (ID, ai) in enumerate(sorted(self.inputs.items()))
         }
         self.axis.getAxis("bottom").setLabel("Time (seconds)")
