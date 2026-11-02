@@ -56,19 +56,21 @@ with the wrong interpreter, the launcher writes the error there and exits silent
 On the Bruker PC, pyControl, the Recorder and the camera run at the same time, each from its own bat file and
 each in its own environment. Run `uv sync` in both the PyControl and the Recorder folder first.
 
-| App | Bat file | Window |
-|---|---|---|
-| pyControl GUI | `PyControl\pyControl.bat` | no console; messages are in the GUI's log |
-| Recorder | `Recorder\Recorder.bat` | console that shows the Recorder's messages |
-| Camera | `Recorder\CamGUI.bat` | console that shows the camera's messages |
+| App | Bat file | Icon file | Window |
+|---|---|---|---|
+| pyControl GUI | `PyControl\pyControl.bat` | `PyControl\source\gui\icons\logo.ico` | no console; messages are in the GUI's log |
+| Recorder | `Recorder\Recorder.bat` | `Recorder\Recorder\recorder.ico` | console that shows the Recorder's messages |
+| Camera | `Recorder\CamGUI.bat` | `Recorder\Camera\camera.ico` | console that shows the camera's messages |
 
 For each bat file:
 
 1. In File Explorer, right-click the file, then Show more options (Windows 11) → Send to → Desktop (create
    shortcut).
 2. Rename the shortcut on the desktop, for example to "pyControl". The default name ends in " - Shortcut".
-3. Recorder and camera only, optional: right-click the shortcut → Properties → Run: Minimized, so the console
-   starts out of the way.
+3. Right-click the shortcut → Properties → Change Icon → Browse, and select the app's icon file from the table.
+   A bat file has no icon of its own, so the shortcut has to point to one.
+4. Recorder and camera only, optional: in the same Properties window, set Run: Minimized, so the console starts
+   out of the way.
 
 Keep the two console windows open while recording: closing one stops that app. Check them when something
 fails, because some messages appear only there. If an app fails at startup, its console stays open and shows
