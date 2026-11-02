@@ -58,7 +58,7 @@ each in its own environment. Run `uv sync` in both the PyControl and the Recorde
 |---|---|---|---|
 | pyControl GUI | `PyControl\pyControl.bat` | `PyControl\source\gui\icons\logo.ico` | no console; messages are in the GUI's log |
 | Recorder | `Recorder\Recorder.bat` | `Recorder\Recorder\recorder.ico` | console that shows the Recorder's messages |
-| Camera | `Recorder\CamGUI.bat` | `Recorder\Camera\camera.ico` | console that shows the camera's messages |
+| Camera | `Recorder\CamGUI.bat` | `Recorder\Camera\camera.ico` | no console; errors are shown over the image |
 
 For each bat file:
 
@@ -67,12 +67,16 @@ For each bat file:
 2. Rename the shortcut on the desktop, for example to "pyControl". The default name ends in " - Shortcut".
 3. Right-click the shortcut → Properties → Change Icon → Browse, and select the app's icon file from the table.
    A bat file has no icon of its own, so the shortcut has to point to one.
-4. Recorder and camera only, optional: in the same Properties window, set Run: Minimized, so the console starts
-   out of the way.
+4. Recorder only, optional: in the same Properties window, set Run: Minimized, so the console starts out of the
+   way.
 
-Keep the two console windows open while recording: closing one stops that app. Check them when something
-fails, because some messages appear only there. If an app fails at startup, its console stays open and shows
-the error until you press a key.
+Keep the Recorder's console open while recording: closing it stops the Recorder. Check it when something fails,
+because some messages appear only there. If the Recorder fails at startup, its console stays open and shows the
+error until you press a key.
+
+The camera app has no console. Errors appear in red over the image and stay until the next session or a click, and
+they are added to `Recorder\Camera\ErrorLog.txt`. If the camera app can't start, a message box says why. If no window
+and no message appear, run `.venv\Scripts\python.exe -m Camera.CamGUI` in the Recorder folder to see the error.
 
 `Recorder.bat` needs LNCM-lib checked out next to the Recorder folder, for `BaserowAPI`. `Recorder\token.py`
 is not in git and has to be there too.
